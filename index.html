@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#f5e9d3">
+<title>じしゃくの もよう · Jishaku no Moyō — Magnet Patterns</title>
+<meta name="description" content="じしゃくをうごかすと、とつぜん『見えない力』のかたちが見える。鉄粉600粒で磁場を可視化する、5〜9さい向けの物理あそびば。Magnetic field visualizer for kids 5–9. Pinda Lab.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #efe1c4;
+    color: #1d2740;
+    font-family: 'Hiragino Maru Gothic ProN', 'Yu Gothic', 'Helvetica Neue', sans-serif;
+    -webkit-user-select: none; user-select: none;
+    overscroll-behavior: none; touch-action: none;
+  }
+  #stage {
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse at 30% 20%, #f6ead0 0%, #efe1c4 55%, #d8c39c 100%);
+  }
+  #fieldCanvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+  }
+
+  /* Top bar */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px;
+    pointer-events: none;
+    z-index: 50;
+  }
+  .title-block { pointer-events: auto; }
+  .title-jp {
+    font-size: 17px; font-weight: 800; letter-spacing: 0.5px;
+    color: #1d2740;
+    text-shadow: 0 1px 0 #fbf3df;
+  }
+  .title-en {
+    font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase;
+    color: #6c5a3e; margin-top: -1px;
+  }
+  .lang-switch {
+    pointer-events: auto;
+    display: flex; gap: 2px;
+    background: rgba(253,245,225,0.85);
+    border: 1px solid #b89d6e;
+    border-radius: 8px;
+    padding: 3px;
+    box-shadow: 0 2px 6px rgba(60,40,10,0.08);
+  }
+  .lang-btn {
+    background: transparent; border: none;
+    color: #6c5a3e; font-size: 11px; font-weight: 700; letter-spacing: 0.6px;
+    padding: 5px 10px; border-radius: 5px; cursor: pointer;
+    font-family: inherit;
+  }
+  .lang-btn.active { background: #1d2740; color: #fef6e1; }
+
+  /* Bottom controls */
+  .bottombar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 10px 14px calc(env(safe-area-inset-bottom) + 12px);
+    z-index: 50;
+    pointer-events: none;
+  }
+  .mode-row {
+    display: flex; gap: 6px;
+    background: rgba(253,245,225,0.92);
+    border: 1px solid #b89d6e;
+    border-radius: 14px;
+    padding: 5px;
+    box-shadow: 0 4px 12px rgba(60,40,10,0.12);
+    pointer-events: auto;
+  }
+  .mode-btn {
+    border: none; background: transparent;
+    color: #6c5a3e; font-family: inherit;
+    font-size: 13px; font-weight: 700;
+    padding: 8px 14px; border-radius: 10px;
+    cursor: pointer;
+    min-width: 64px;
+  }
+  .mode-btn.active { background: #1d2740; color: #fef6e1; }
+  .action-row {
+    display: flex; gap: 8px;
+    pointer-events: auto;
+  }
+  .action-btn {
+    border: 1px solid #b89d6e;
+    background: rgba(253,245,225,0.92);
+    color: #1d2740; font-family: inherit;
+    font-size: 12px; font-weight: 700;
+    padding: 7px 12px; border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(60,40,10,0.08);
+  }
+  .action-btn.toggled { background: #1d2740; color: #fef6e1; border-color: #1d2740; }
+
+  /* Hint bubble */
+  .hint {
+    position: fixed; left: 50%; top: 60px; transform: translateX(-50%);
+    background: rgba(29,39,64,0.92);
+    color: #fef6e1;
+    font-size: 13px; font-weight: 600;
+    padding: 9px 14px; border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    z-index: 60;
+    pointer-events: none;
+    max-width: 90%;
+    text-align: center;
+    transition: opacity 0.5s;
+    line-height: 1.55;
+  }
+  .hint.hidden { opacity: 0; }
+
+  /* Info card */
+  .info-fab {
+    position: fixed; bottom: 84px; right: 12px;
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    background: rgba(253,245,225,0.92);
+    border: 1px solid #b89d6e;
+    color: #1d2740;
+    font-size: 18px; font-weight: 800; font-family: serif;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(60,40,10,0.15);
+    z-index: 50;
+  }
+  .info-overlay {
+    position: fixed; inset: 0;
+    background: rgba(29,25,15,0.55);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 100;
+    padding: 18px;
+  }
+  .info-overlay.show { display: flex; }
+  .info-card {
+    background: #fdf5e1;
+    border: 1px solid #b89d6e;
+    border-radius: 18px;
+    padding: 22px 22px 18px;
+    max-width: 420px; width: 100%;
+    max-height: 86vh; overflow-y: auto;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+    line-height: 1.7;
+  }
+  .info-card h2 {
+    font-size: 18px; font-weight: 800; margin-bottom: 10px;
+    color: #1d2740;
+  }
+  .info-card p { font-size: 13.5px; color: #2a2a2a; margin-bottom: 9px; }
+  .info-card .close {
+    margin-top: 8px;
+    background: #1d2740; color: #fef6e1;
+    border: none; border-radius: 10px;
+    padding: 8px 16px; cursor: pointer; font-family: inherit;
+    font-weight: 700; font-size: 13px;
+    width: 100%;
+  }
+
+  /* Pinda Lab branding sits inside the title-en already */
+
+  @media (max-width: 380px) {
+    .mode-btn { font-size: 12px; padding: 7px 10px; min-width: 54px; }
+    .action-btn { font-size: 11px; padding: 6px 10px; }
+    .title-jp { font-size: 15px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="fieldCanvas"></canvas>
+</div>
+
+<div class="topbar">
+  <div class="title-block">
+    <div class="title-jp" data-i18n="title">じしゃくの もよう</div>
+    <div class="title-en">Jishaku no Moyō · Magnet Patterns</div>
+  </div>
+  <div class="lang-switch">
+    <button class="lang-btn active" data-lang="ja">JA</button>
+    <button class="lang-btn" data-lang="en">EN</button>
+  </div>
+</div>
+
+<div class="hint" id="hint" data-i18n="hint1">ゆびで じしゃくを ドラッグしてみよう</div>
+
+<button class="info-fab" id="infoBtn" aria-label="Info">？</button>
+
+<div class="info-overlay" id="infoOverlay">
+  <div class="info-card">
+    <h2 data-i18n="infoTitle">じしゃくの もよう とは？</h2>
+    <p data-i18n="infoP1">じしゃくの まわりには、見えない『力のかたち』があります。鉄の こな（鉄粉／てっぷん）を まくと、その かたちが すがたを あらわします。</p>
+    <p data-i18n="infoP2">画面いっぱいの 600つぶの 鉄粉が、本物のように、磁場の むきに そろって ならびます。じしゃくを うごかすたび、もよう ぜんたい が ゆれて、組みなおされます。</p>
+    <p data-i18n="infoP3"><b>2じしゃく モード：</b>じしゃくを タップすると、N極とS極が 入れかわります。<b>同じ極どうし</b>なら しりぞけあい、<b>ちがう極どうし</b>なら 引きあう もようが 見えます。</p>
+    <p data-i18n="infoP4"><b>U字 モード：</b>馬蹄形（ばていけい）の じしゃくは、N極と S極が 近い ぶん、すき間に ぎゅっと 力が あつまります。これが クレーンや スピーカーの しくみ。</p>
+    <p data-i18n="infoP5"><b>「線」</b>を おすと、鉄粉が とおった あと が のこって、磁場の 流れる みち（磁力線）が 見えます。</p>
+    <p data-i18n="infoP6" style="font-size:12px;color:#6c5a3e;margin-top:14px;">5〜9さい むけ。1まい HTML、ライブラリなし、データは のこさない。<br>Pinda Lab · 2026</p>
+    <button class="close" id="closeInfo" data-i18n="close">とじる</button>
+  </div>
+</div>
+
+<div class="bottombar">
+  <div class="mode-row" id="modeRow">
+    <button class="mode-btn active" data-mode="one" data-i18n="modeOne">1じしゃく</button>
+    <button class="mode-btn" data-mode="two" data-i18n="modeTwo">2じしゃく</button>
+    <button class="mode-btn" data-mode="horseshoe" data-i18n="modeHorseshoe">U字</button>
+  </div>
+  <div class="action-row">
+    <button class="action-btn" id="trailBtn" data-i18n="trail">線</button>
+    <button class="action-btn" id="shakeBtn" data-i18n="shake">ふる</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* ── i18n ── */
+const I18N = {
+  ja: {
+    title: 'じしゃくの もよう',
+    hint1: 'ゆびで じしゃくを ドラッグしてみよう',
+    hintTwoMag: 'タップで N⇄S が いれかわる',
+    hintHorseshoe: '馬蹄じしゃくの すき間に 力が あつまる',
+    modeOne: '1じしゃく', modeTwo: '2じしゃく', modeHorseshoe: 'U字',
+    trail: '線', shake: 'ふる', close: 'とじる',
+    infoTitle: 'じしゃくの もよう とは？',
+    infoP1: 'じしゃくの まわりには、見えない『力のかたち』があります。鉄の こな（鉄粉／てっぷん）を まくと、その かたちが すがたを あらわします。',
+    infoP2: '画面いっぱいの 600つぶの 鉄粉が、本物のように、磁場の むきに そろって ならびます。じしゃくを うごかすたび、もよう ぜんたい が ゆれて、組みなおされます。',
+    infoP3: '<b>2じしゃく モード：</b>じしゃくを タップすると、N極とS極が 入れかわります。<b>同じ極どうし</b>なら しりぞけあい、<b>ちがう極どうし</b>なら 引きあう もようが 見えます。',
+    infoP4: '<b>U字 モード：</b>馬蹄形（ばていけい）の じしゃくは、N極と S極が 近い ぶん、すき間に ぎゅっと 力が あつまります。これが クレーンや スピーカーの しくみ。',
+    infoP5: '<b>「線」</b>を おすと、鉄粉が とおった あと が のこって、磁場の 流れる みち（磁力線）が 見えます。',
+    infoP6: '5〜9さい むけ。1まい HTML、ライブラリなし、データは のこさない。<br>Pinda Lab · 2026',
+    poleN: 'N', poleS: 'S'
+  },
+  en: {
+    title: 'Magnet Patterns',
+    hint1: 'Drag the magnet with your finger',
+    hintTwoMag: 'Tap a magnet to flip N⇄S',
+    hintHorseshoe: 'Field concentrates in the horseshoe gap',
+    modeOne: '1 magnet', modeTwo: '2 magnets', modeHorseshoe: 'Horseshoe',
+    trail: 'Lines', shake: 'Shake', close: 'Close',
+    infoTitle: 'About Magnet Patterns',
+    infoP1: 'Around every magnet there is an invisible "shape of force." Sprinkle iron filings on it, and the shape suddenly appears.',
+    infoP2: '600 simulated iron filings cover the screen, each aligning to the local magnetic field — exactly like the real thing. Move the magnet, and the whole pattern rearranges.',
+    infoP3: '<b>2-magnet mode:</b> tap a magnet to flip its poles. <b>Same poles</b> repel, <b>opposite poles</b> attract — and you can see the difference.',
+    infoP4: '<b>Horseshoe mode:</b> with N and S brought close together, the field concentrates in the gap. This is how cranes, speakers and electric motors work.',
+    infoP5: 'Press <b>Lines</b> to leave a trail behind each filing — the curves of magnetic field lines emerge.',
+    infoP6: 'For ages 5–9. Single HTML file, no libraries, no data stored.<br>Pinda Lab · 2026',
+    poleN: 'N', poleS: 'S'
+  }
+};
+let lang = 'ja';
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const k = el.dataset.i18n;
+    if (I18N[lang][k] !== undefined) el.innerHTML = I18N[lang][k];
+  });
+  document.querySelectorAll('.lang-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.lang === lang));
+}
+document.querySelectorAll('.lang-btn').forEach(b => {
+  b.addEventListener('click', () => { lang = b.dataset.lang; applyLang(); });
+});
+
+/* ── canvas setup ── */
+const canvas = document.getElementById('fieldCanvas');
+const ctx = canvas.getContext('2d');
+let DPR = Math.min(window.devicePixelRatio || 1, 2);
+let W = 0, H = 0;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  rebuildFilings();
+  layoutMagnets();
+}
+window.addEventListener('resize', resize);
+
+/* ── filings ── */
+const TARGET_FILINGS = 600;
+let filings = [];
+function rebuildFilings() {
+  // density-aware count
+  const area = W * H;
+  const target = Math.min(820, Math.max(360, Math.round(area / 1500)));
+  filings = [];
+  for (let i = 0; i < target; i++) {
+    filings.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      angle: Math.random() * Math.PI,
+      strength: 0
+    });
+  }
+}
+
+/* ── magnets ──
+   Each magnet: position (cx, cy), angle (rotation), length L, polarity (1 = N right, -1 = N left).
+   The two poles are at: cx ± (L/2)*cos(a), cy ± (L/2)*sin(a)
+   For horseshoe magnet, we model it as 2 "U arms" — but visually a horseshoe with poles
+   at the open end. Field-wise: same as 2 closely spaced poles facing the same direction.
+*/
+let mode = 'one';
+let magnets = [];
+
+function layoutMagnets() {
+  if (mode === 'one') {
+    magnets = [{
+      cx: W / 2, cy: H / 2,
+      angle: 0,
+      length: Math.min(W, H) * 0.32,
+      polarity: 1,
+      kind: 'bar'
+    }];
+  } else if (mode === 'two') {
+    const L = Math.min(W, H) * 0.26;
+    magnets = [
+      { cx: W * 0.32, cy: H / 2, angle: 0, length: L, polarity: 1, kind: 'bar' },
+      { cx: W * 0.68, cy: H / 2, angle: 0, length: L, polarity: -1, kind: 'bar' }
+    ];
+  } else if (mode === 'horseshoe') {
+    magnets = [{
+      cx: W / 2, cy: H / 2 + Math.min(W, H) * 0.05,
+      angle: -Math.PI / 2, // opening upward
+      length: Math.min(W, H) * 0.34,
+      polarity: 1,
+      kind: 'horseshoe',
+      gap: Math.min(W, H) * 0.18
+    }];
+  }
+}
+
+/* ── physics: net B field at point p ── */
+const POLE_MIN_R2 = 24 * 24; // softens singularity
+function poleField(px, py, sx, sy, q, out) {
+  const dx = px - sx, dy = py - sy;
+  let r2 = dx * dx + dy * dy;
+  if (r2 < POLE_MIN_R2) r2 = POLE_MIN_R2;
+  const r = Math.sqrt(r2);
+  const f = q / (r2 * r); // 1/r^3 because we multiply by r unit vector implicit (dx,dy)/r * (1/r^2)
+  out.bx += dx * f;
+  out.by += dy * f;
+}
+function getPoles(m) {
+  const half = m.length / 2;
+  const ca = Math.cos(m.angle), sa = Math.sin(m.angle);
+  if (m.kind === 'bar') {
+    // poles along axis
+    const nx = m.cx + ca * half * m.polarity;
+    const ny = m.cy + sa * half * m.polarity;
+    const sx = m.cx - ca * half * m.polarity;
+    const sy = m.cy - sa * half * m.polarity;
+    return [{x: nx, y: ny, q: 1}, {x: sx, y: sy, q: -1}];
+  } else {
+    // horseshoe: both poles at the open end, side by side
+    // axis points "into" the U; perpendicular separates the poles
+    const px = -sa, py = ca; // perpendicular
+    const tipX = m.cx + ca * half;
+    const tipY = m.cy + sa * half;
+    const g = m.gap / 2;
+    const nx = tipX + px * g * m.polarity;
+    const ny = tipY + py * g * m.polarity;
+    const sx = tipX - px * g * m.polarity;
+    const sy = tipY - py * g * m.polarity;
+    return [{x: nx, y: ny, q: 1}, {x: sx, y: sy, q: -1}];
+  }
+}
+
+const _f = { bx: 0, by: 0 };
+function fieldAt(px, py) {
+  _f.bx = 0; _f.by = 0;
+  for (const m of magnets) {
+    const poles = getPoles(m);
+    poleField(px, py, poles[0].x, poles[0].y, +1, _f);
+    poleField(px, py, poles[1].x, poles[1].y, -1, _f);
+  }
+  return _f;
+}
+
+/* ── rendering ── */
+let trailMode = false;
+
+function clearStage() {
+  // parchment with subtle vignette
+  const grad = ctx.createRadialGradient(W * 0.3, H * 0.2, 0, W / 2, H / 2, Math.max(W, H));
+  grad.addColorStop(0, '#f8edd3');
+  grad.addColorStop(0.55, '#efe1c4');
+  grad.addColorStop(1, '#d8c39c');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function fadeStage() {
+  // for trail mode — slow fade
+  ctx.fillStyle = 'rgba(239,225,196,0.05)';
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawFilings() {
+  ctx.lineCap = 'round';
+  for (const f of filings) {
+    const len = 4.5 + f.strength * 3.5;
+    const cx = f.x, cy = f.y;
+    const ca = Math.cos(f.angle), sa = Math.sin(f.angle);
+    const x1 = cx - ca * len, y1 = cy - sa * len;
+    const x2 = cx + ca * len, y2 = cy + sa * len;
+    const alpha = 0.35 + Math.min(0.55, f.strength * 1.3);
+    ctx.strokeStyle = `rgba(38,30,24,${alpha})`;
+    ctx.lineWidth = 1.4 + Math.min(1.0, f.strength * 1.5);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+}
+
+function drawMagnet(m) {
+  ctx.save();
+  ctx.translate(m.cx, m.cy);
+  ctx.rotate(m.angle);
+
+  if (m.kind === 'bar') {
+    const L = m.length, w = Math.max(28, L * 0.18);
+    const half = L / 2;
+    const r = w * 0.45;
+    // body
+    ctx.shadowColor = 'rgba(20,15,5,0.25)';
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 4;
+    // halves: split along y axis (perpendicular to rotation)
+    // we draw two halves
+    const polarityMul = m.polarity;
+
+    // left half (relative to rotation): x in [-half, 0]
+    ctx.fillStyle = polarityMul > 0 ? '#3a5fcd' : '#d23b3b';
+    ctx.beginPath();
+    roundedRectPath(ctx, -half, -w / 2, half, w, r, [r, 0, 0, r]);
+    ctx.fill();
+    // right half
+    ctx.fillStyle = polarityMul > 0 ? '#d23b3b' : '#3a5fcd';
+    ctx.beginPath();
+    roundedRectPath(ctx, 0, -w / 2, half, w, r, [0, r, r, 0]);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+
+    // gap line
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, -w / 2 + 3);
+    ctx.lineTo(0, w / 2 - 3);
+    ctx.stroke();
+
+    // pole letters
+    ctx.font = `bold ${Math.round(w * 0.55)}px 'Helvetica Neue', Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    const leftLetter = polarityMul > 0 ? I18N[lang].poleS : I18N[lang].poleN;
+    const rightLetter = polarityMul > 0 ? I18N[lang].poleN : I18N[lang].poleS;
+    ctx.fillText(leftLetter, -half / 2, 0);
+    ctx.fillText(rightLetter, half / 2, 0);
+
+  } else if (m.kind === 'horseshoe') {
+    // horseshoe: U-shape opening "up" relative to local axis (axis along +x)
+    // local: arms run along x from -half to +half, separated in y by gap
+    const L = m.length, gap = m.gap;
+    const armW = Math.max(20, L * 0.16);
+    const half = L / 2;
+    // U shape: two arms (top and bottom) connected at -half end
+    ctx.shadowColor = 'rgba(20,15,5,0.25)';
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 4;
+
+    // bottom arm (S pole at +half end if polarity > 0 means... let's pick: top arm = N, bottom = S when polarity > 0)
+    const topColor = m.polarity > 0 ? '#d23b3b' : '#3a5fcd';
+    const botColor = m.polarity > 0 ? '#3a5fcd' : '#d23b3b';
+
+    // back connector (rectangle at -half end)
+    ctx.fillStyle = '#7a6a4f';
+    const backX = -half - armW * 0.4;
+    const backY = -gap / 2 - armW / 2;
+    const backH = gap + armW;
+    ctx.beginPath();
+    roundedRectPath(ctx, backX, backY, armW, backH, armW * 0.3, [armW * 0.4, 0, 0, armW * 0.4]);
+    ctx.fill();
+
+    // top arm (color = topColor toward open end)
+    const armLen = L; // from back to open
+    // gradient along arm: gray near back -> color near tip
+    const gradTop = ctx.createLinearGradient(-half, 0, half, 0);
+    gradTop.addColorStop(0, '#7a6a4f');
+    gradTop.addColorStop(0.55, '#7a6a4f');
+    gradTop.addColorStop(1, topColor);
+    ctx.fillStyle = gradTop;
+    ctx.beginPath();
+    roundedRectPath(ctx, -half, -gap / 2 - armW, armLen, armW, armW * 0.3, [0, armW * 0.4, armW * 0.4, 0]);
+    ctx.fill();
+
+    const gradBot = ctx.createLinearGradient(-half, 0, half, 0);
+    gradBot.addColorStop(0, '#7a6a4f');
+    gradBot.addColorStop(0.55, '#7a6a4f');
+    gradBot.addColorStop(1, botColor);
+    ctx.fillStyle = gradBot;
+    ctx.beginPath();
+    roundedRectPath(ctx, -half, gap / 2, armLen, armW, armW * 0.3, [0, armW * 0.4, armW * 0.4, 0]);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+
+    // pole letters at the tips (counter-rotate so they read upright)
+    const tipTopLetter = m.polarity > 0 ? I18N[lang].poleN : I18N[lang].poleS;
+    const tipBotLetter = m.polarity > 0 ? I18N[lang].poleS : I18N[lang].poleN;
+    drawUprightLetter(ctx, half - armW / 2, -gap / 2 - armW / 2, tipTopLetter, armW * 0.7, m.angle);
+    drawUprightLetter(ctx, half - armW / 2,  gap / 2 + armW / 2, tipBotLetter, armW * 0.7, m.angle);
+  }
+
+  ctx.restore();
+}
+
+function drawUprightLetter(ctx, x, y, text, fontSize, parentAngle) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-parentAngle);
+  ctx.font = `bold ${Math.round(fontSize)}px 'Helvetica Neue', Arial, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.fillText(text, 0, 0);
+  ctx.restore();
+}
+
+function roundedRectPath(ctx, x, y, w, h, r, corners) {
+  // corners: [tl, tr, br, bl]
+  const [tl, tr, br, bl] = corners || [r, r, r, r];
+  ctx.moveTo(x + tl, y);
+  ctx.lineTo(x + w - tr, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + tr);
+  ctx.lineTo(x + w, y + h - br);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
+  ctx.lineTo(x + bl, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - bl);
+  ctx.lineTo(x, y + tl);
+  ctx.quadraticCurveTo(x, y, x + tl, y);
+}
+
+/* ── filings step ── */
+function stepFilings() {
+  const ROT_LERP = 0.32; // angle interpolation per frame
+  for (const f of filings) {
+    const fld = fieldAt(f.x, f.y);
+    const mag2 = fld.bx * fld.bx + fld.by * fld.by;
+    if (mag2 < 1e-12) {
+      f.strength = 0;
+      continue;
+    }
+    const target = Math.atan2(fld.by, fld.bx);
+    // shortest rotation
+    let diff = target - f.angle;
+    // because filings are line segments (180-symmetric), normalize to [-pi/2, pi/2]
+    while (diff >  Math.PI / 2) diff -= Math.PI;
+    while (diff < -Math.PI / 2) diff += Math.PI;
+    f.angle += diff * ROT_LERP;
+    // strength: cap & log-scale for visual
+    const m = Math.sqrt(mag2);
+    f.strength = Math.min(1, m * 8000); // tune
+  }
+}
+
+/* ── render loop ── */
+function render() {
+  if (trailMode) {
+    fadeStage();
+  } else {
+    clearStage();
+  }
+  stepFilings();
+  drawFilings();
+  for (const m of magnets) drawMagnet(m);
+  requestAnimationFrame(render);
+}
+
+/* ── interaction ── */
+let drag = null; // {magnet, dx, dy, moved, downTime}
+function pointerPos(e) {
+  const t = e.touches ? e.touches[0] : e;
+  return { x: t.clientX, y: t.clientY };
+}
+function magnetUnderPoint(x, y) {
+  // Hit-test: bounding box of magnet, but allow generous touch margin
+  for (let i = magnets.length - 1; i >= 0; i--) {
+    const m = magnets[i];
+    const ca = Math.cos(-m.angle), sa = Math.sin(-m.angle);
+    const dx = x - m.cx, dy = y - m.cy;
+    const lx = dx * ca - dy * sa;
+    const ly = dx * sa + dy * ca;
+    if (m.kind === 'bar') {
+      const half = m.length / 2;
+      const w = Math.max(28, m.length * 0.18);
+      const margin = 14;
+      if (Math.abs(lx) <= half + margin && Math.abs(ly) <= w / 2 + margin) return m;
+    } else if (m.kind === 'horseshoe') {
+      const half = m.length / 2;
+      const armW = Math.max(20, m.length * 0.16);
+      const margin = 14;
+      // bounding box: x in [-half - armW*0.4, +half], y in [-gap/2 - armW, +gap/2 + armW]
+      if (lx >= -half - armW * 0.5 - margin && lx <= half + margin &&
+          Math.abs(ly) <= m.gap / 2 + armW + margin) return m;
+    }
+  }
+  return null;
+}
+
+function onPointerDown(e) {
+  e.preventDefault();
+  const p = pointerPos(e);
+  const m = magnetUnderPoint(p.x, p.y);
+  if (m) {
+    drag = { magnet: m, dx: p.x - m.cx, dy: p.y - m.cy, moved: false, downTime: Date.now() };
+  }
+}
+function onPointerMove(e) {
+  if (!drag) return;
+  e.preventDefault();
+  const p = pointerPos(e);
+  const nx = p.x - drag.dx, ny = p.y - drag.dy;
+  if (Math.abs(nx - drag.magnet.cx) > 2 || Math.abs(ny - drag.magnet.cy) > 2) drag.moved = true;
+  // clamp inside viewport with a small margin
+  const margin = drag.magnet.length * 0.4;
+  drag.magnet.cx = Math.max(margin, Math.min(W - margin, nx));
+  drag.magnet.cy = Math.max(margin, Math.min(H - margin, ny));
+}
+function onPointerUp(e) {
+  if (!drag) return;
+  // tap = flip polarity (only meaningful in two-magnet & horseshoe)
+  const elapsed = Date.now() - drag.downTime;
+  if (!drag.moved && elapsed < 350) {
+    drag.magnet.polarity *= -1;
+    flashHint(I18N[lang].hintTwoMag);
+  }
+  drag = null;
+}
+canvas.addEventListener('mousedown', onPointerDown);
+canvas.addEventListener('mousemove', onPointerMove);
+window.addEventListener('mouseup', onPointerUp);
+canvas.addEventListener('touchstart', onPointerDown, { passive: false });
+canvas.addEventListener('touchmove', onPointerMove, { passive: false });
+window.addEventListener('touchend', onPointerUp);
+window.addEventListener('touchcancel', onPointerUp);
+
+/* ── controls ── */
+document.querySelectorAll('.mode-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    mode = b.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach(x => x.classList.toggle('active', x === b));
+    layoutMagnets();
+    rebuildFilings();
+    if (mode === 'two') flashHint(I18N[lang].hintTwoMag);
+    else if (mode === 'horseshoe') flashHint(I18N[lang].hintHorseshoe);
+    else flashHint(I18N[lang].hint1);
+  });
+});
+
+document.getElementById('shakeBtn').addEventListener('click', () => {
+  rebuildFilings();
+});
+document.getElementById('trailBtn').addEventListener('click', (e) => {
+  trailMode = !trailMode;
+  e.currentTarget.classList.toggle('toggled', trailMode);
+});
+
+document.getElementById('infoBtn').addEventListener('click', () => {
+  document.getElementById('infoOverlay').classList.add('show');
+});
+document.getElementById('closeInfo').addEventListener('click', () => {
+  document.getElementById('infoOverlay').classList.remove('show');
+});
+document.getElementById('infoOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'infoOverlay')
+    document.getElementById('infoOverlay').classList.remove('show');
+});
+
+/* ── hint ── */
+let hintTimer = null;
+const hintEl = document.getElementById('hint');
+function flashHint(text) {
+  hintEl.textContent = text;
+  hintEl.classList.remove('hidden');
+  if (hintTimer) clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => hintEl.classList.add('hidden'), 2400);
+}
+
+/* ── boot ── */
+applyLang();
+resize();
+flashHint(I18N[lang].hint1);
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
